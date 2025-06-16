@@ -1,104 +1,128 @@
 import os
 import random
+import httpx
+import threading
 from datetime import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from threading import Thread
 
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
-import httpx  # для команды /joke
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, JobQueue
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Основной текст и данные
-goals_text = (
-    "Улучшать девопс\n"
-    "Жить по графику\n"
-    "Выучить английский\n"
-    "Заниматься спортом\n"
-    "Читать книгу\n"
-    "Слушать музыку\n"
-    "Уметь отдыхать\n"
-    "Жить спокойно и размеренно\n"
-    "Богатство и доброта - это нормально\n"
-    "Будь собой, говори честно, иди своим путём\n"
-    "Перестать страдать, нужно радоваться мелочам и ценить жизнь\n"
-    "Не ленись, слушай близких\n"
-    "Радуйся моменту, цени жизнь\n"
-    "Убери социальные сети\n"
-    "Не будь токсичным, знай границы\n"
-    "Развивай речь и дикцию\n"
-    "Мозг любит иллюзии — но ты выбираешь путь\n"
-    "Мой девиз - постоянное развитие и стабильность"
-)
+# Твои цели
+goals_text = """\
+Улучшать девопс
+Делать проект (игру)
+Жить по графику
+Выучить английский
+Заниматься спортом
+Читать книгу
+Слушать музыку
+Смотреть ролики в ютубе (без вины)
+Жить спокойно, не дрочить
+Уметь отдыхать
+Жить спокойно и размеренно
+Богатство и доброта — это нормально
+Будь собой, говори честно, иди своим путём
+Перестань быть "слабым ребёнком", ты взрослый
+Перестать страдать, радоваться мелочам и ценить жизнь
+Не ленись, слушай близких
+Радуйся моменту, цени жизнь
+Удали Instagram, не сливай фокус
+Радуйся моменту
+Убери социальные сети
+Не будь токсичным, знай границы
+Развивай речь и дикцию
+Мозг любит иллюзии — но ты выбираешь путь
+Мой девиз — постоянное развитие и стабильность
+"""
 
 daily_checklist = [
-    "Отжимания (15 мин +1 раз каждый тренировочный день)",
-    "Английский (Смотреть ролики на англ)",
-    "1 задача по девопсу каждый рабочий день",
-    "15 минут книги перед сном",
-    "Создавать атмосферу добра",
-    "Радость + тишина"
+    "✅ Отжимания (15 мин +1 раз каждый тренировочный день)",
+    "✅ Английский (Смотреть ролики на англ)",
+    "✅ 1 задача по девопсу каждый рабочий день",
+    "✅ 15 минут книги перед сном",
+    "✅ Создавать атмосферу добра",
+    "✅ Радость + тишина"
 ]
 
-affirmations = [line for line in goals_text.strip().split('\n') if line]
+affirmations = goals_text.strip().splitlines()
 
-# --- Команды ---
+# Клавиатура
+main_keyboard = ReplyKeyboardMarkup(
+    [
+        ["Сегодня", "Мотивация"],
+        ["Цели", "Joke 😈"]
+    ],
+    resize_keyboard=True
+)
+
+# Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет, друг! Добро пожаловать!")
+    await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
 
-async def goals(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(goals_text)
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
 
-async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📝 Твои задачи на сегодня:\n" + "\n".join(daily_checklist))
+    if text == "Сегодня":
+        tasks = "\n".join(daily_checklist)
+        await update.message.reply_text(f"📝 Задачи на сегодня:\n{tasks}")
+    elif text == "Мотивация":
+        quote = random.choice(affirmations)
+        await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
+    elif text == "Цели":
+        await update.message.reply_text(goals_text)
+    elif text == "Joke 😈":
+        joke = await fetch_dark_joke()
+        await update.message.reply_text(joke)
+    else:
+        await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
 
-async def affirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎯 Мотивация дня:\n" + random.choice(affirmations))
-
-async def joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = "https://v2.jokeapi.dev/joke/Dark?format=txt"
+# Шутки с чёрным юмором
+async def fetch_dark_joke():
+    url = "https://v2.jokeapi.dev/joke/Dark?type=twopart"
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=5.0)
-            await update.message.reply_text("🃏 Шутка:\n" + response.text.strip())
+            response = await client.get(url)
+            data = response.json()
+            return f"😈 {data['setup']}\n👉 {data['delivery']}"
     except Exception:
-        await update.message.reply_text("😅 Не удалось получить шутку. Попробуй позже.")
+        return "Не удалось получить шутку. Попробуй позже."
 
-# --- Напоминания ---
+# Напоминания (если используешь chat_id)
 async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро, Адиль! Сегодня твои цели ждут: /daily")
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро! Не забудь: /start → Сегодня")
 
 async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что удалось и что улучшить.")
 
-# --- HTTP-сервер для Render ---
+# Фейковый HTTP-сервер для Render
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"OK")
+        self.wfile.write(b'OK')
 
-def run_dummy_server():
+def run_fake_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("", port), DummyHandler)
-    print(f"🌐 Dummy HTTP-сервер запущен на порту {port}")
+    print(f"Fake HTTP server running on port {port}")
     server.serve_forever()
 
-# --- Запуск ---
-if __name__ == '__main__':
-    Thread(target=run_dummy_server, daemon=True).start()
+threading.Thread(target=run_fake_server, daemon=True).start()
 
+# ---------- ЗАПУСК ----------
+if __name__ == '__main__':More actions
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("goals", goals))
-    app.add_handler(CommandHandler("daily", daily))
-    app.add_handler(CommandHandler("affirmation", affirmation))
-    app.add_handler(CommandHandler("joke", joke))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     job_queue: JobQueue = app.job_queue
-    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 по Алматы
-    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 по Алматы
+
+    # ✅ Замени chat_id на свой (временно можешь распечатать через update.effective_chat.id)
+    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 Алматы
+    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 Алматы
 
     app.run_polling()
