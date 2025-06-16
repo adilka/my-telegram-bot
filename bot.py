@@ -1,15 +1,12 @@
 import os
 import random
-import httpx
-import asyncio
-import threading
 from datetime import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes,
-    filters, JobQueue
-)
+from threading import Thread
+
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
+import httpx  # для команды /joke
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -46,84 +43,62 @@ daily_checklist = [
 
 affirmations = [line for line in goals_text.strip().split('\n') if line]
 
-# Клавиатуры
-main_keyboard = ReplyKeyboardMarkup(
-    [["Today"], ["Motivation", "Goals"], ["Joke"]], resize_keyboard=True
-)
+# --- Команды ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет, друг! Добро пожаловать!")
 
-# HTTP сервер для Render
+async def goals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(goals_text)
+
+async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📝 Твои задачи на сегодня:\n" + "\n".join(daily_checklist))
+
+async def affirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🎯 Мотивация дня:\n" + random.choice(affirmations))
+
+async def joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = "https://v2.jokeapi.dev/joke/Dark?format=txt"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=5.0)
+            await update.message.reply_text("🃏 Шутка:\n" + response.text.strip())
+    except Exception:
+        await update.message.reply_text("😅 Не удалось получить шутку. Попробуй позже.")
+
+# --- Напоминания ---
+async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро, Адиль! Сегодня твои цели ждут: /daily")
+
+async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
+
+# --- HTTP-сервер для Render ---
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'OK')
+        self.wfile.write(b"OK")
 
-def run_fake_server():
+def run_dummy_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("", port), DummyHandler)
-    print(f"Fake HTTP server запущен на порту {port}")
+    print(f"🌐 Dummy HTTP-сервер запущен на порту {port}")
     server.serve_forever()
 
-threading.Thread(target=run_fake_server, daemon=True).start()
-
-# Команды
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Выбирай действие ниже:", reply_markup=main_keyboard
-    )
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-
-    if text == "Today":
-        tasks = "\n".join(daily_checklist)
-        await update.message.reply_text(f"Твои задачи на сегодня:\n{tasks}")
-
-    elif text == "Motivation":
-        quote = random.choice(affirmations)
-        await update.message.reply_text(f"Мотивация дня:\n{quote}")
-
-    elif text == "Goals":
-        await update.message.reply_text(goals_text)
-
-    elif text == "Joke":
-        joke = await fetch_joke()
-        msg = await update.message.reply_text(joke)
-        await asyncio.sleep(300)
-        try:
-            await msg.delete()
-        except:
-            pass
-
-    else:
-        await update.message.reply_text("Выбери действие с кнопок.")
-
-# Генерация шуток
-async def fetch_joke():
-    url = "https://v2.jokeapi.dev/joke/Dark?format=txt"
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            return response.text.strip()
-    except:
-        return "Не удалось получить шутку."
-
-# Напоминания
-async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="Доброе утро, Адиль! Сегодня твои цели ждут: Today")
-
-async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
-
-# Запуск бота
+# --- Запуск ---
 if __name__ == '__main__':
+    Thread(target=run_dummy_server, daemon=True).start()
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(CommandHandler("goals", goals))
+    app.add_handler(CommandHandler("daily", daily))
+    app.add_handler(CommandHandler("affirmation", affirmation))
+    app.add_handler(CommandHandler("joke", joke))
 
     job_queue: JobQueue = app.job_queue
-    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)
-    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419)
+    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 по Алматы
+    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 по Алматы
 
     app.run_polling()
