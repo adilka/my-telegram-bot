@@ -39,7 +39,7 @@ daily_checklist = [
     "✅ Радость + тишина"
 ]
 
-affirmations = [line.strip() for line in goals_text.strip().split('\n') if line.strip()]
+affirmations = goals_text.strip().splitlines()
 
 # Клавиатура
 main_keyboard = ReplyKeyboardMarkup(
