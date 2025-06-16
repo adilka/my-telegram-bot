@@ -5,9 +5,12 @@ import threading
 import random
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import time
+import httpx
+import asyncio
 
 # Токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+recent_jokes = set()
 
 # Контент
 goals_text = """
@@ -45,7 +48,7 @@ affirmations = goals_text.strip().splitlines()
 main_keyboard = ReplyKeyboardMarkup(
     [
         ["Сегодня", "Мотивация"],
-        ["Цели", "Закрыть"]
+        ["Цели", "Прикол"]
     ],
     resize_keyboard=True
 )
@@ -68,10 +71,39 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
     elif text == "Цели / Установки":
         await update.message.reply_text(goals_text)
-    elif text == "Закрыть":
-        await update.message.reply_text("Спасибо, до встречи <3", reply_markup=ReplyKeyboardRemove())
+    elif text == "Шутка дня 😂":
+        joke = await fetch_joke()
+        await update.message.reply_text(joke)
+
     else:
         await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
+
+#шутка щщс
+async def fetch_joke():
+    url = "https://v2.jokeapi.dev/joke/Any?type=twopart"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=5)
+            data = response.json()
+
+            joke_id = data.get("id")
+            if joke_id in recent_jokes:
+                return await fetch_joke()  # попробуем снова
+
+            # сохраняем шутку в память на 5 минут
+            recent_jokes.add(joke_id)
+            asyncio.create_task(forget_joke(joke_id))
+
+            setup = data.get("setup", "🙂")
+            delivery = data.get("delivery", "...")
+            return f"😂 {setup}\n👉 {delivery}"
+    except Exception as e:
+        return "😅 Не удалось получить шутку. Попробуй позже!"
+
+# Функция забывания
+async def forget_joke(joke_id):
+    await asyncio.sleep(300)  # 5 минут
+    recent_jokes.discard(joke_id)
 
 # ---------- НАПОМИНАНИЯ ----------
 async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
