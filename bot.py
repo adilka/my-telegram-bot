@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes,
-    filters
+    filters, JobQueue
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -47,16 +47,9 @@ daily_checklist = [
 affirmations = [line for line in goals_text.strip().split('\n') if line]
 
 # Клавиатуры
-start_keyboard = ReplyKeyboardMarkup(
-    [["Start"]], resize_keyboard=True
-)
-
 main_keyboard = ReplyKeyboardMarkup(
     [["Today"], ["Motivation", "Goals"], ["Joke"]], resize_keyboard=True
 )
-
-# Хранилище активных пользователей
-active_users = set()
 
 # HTTP сервер для Render
 class DummyHandler(BaseHTTPRequestHandler):
@@ -68,40 +61,27 @@ class DummyHandler(BaseHTTPRequestHandler):
 def run_fake_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("", port), DummyHandler)
-    print(f"Fake HTTP server zapushen na portu {port}")
+    print(f"Fake HTTP server запущен на порту {port}")
     server.serve_forever()
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    active_users.add(user_id)
     await update.message.reply_text(
-        "Welcome! Choose an action below:", reply_markup=main_keyboard
+        "Привет! Выбирай действие ниже:", reply_markup=main_keyboard
     )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    text = update.message.text
-
-    if user_id not in active_users:
-        if text == "Start":
-            active_users.add(user_id)
-            await update.message.reply_text(
-                "Welcome! Choose an action below:", reply_markup=main_keyboard
-            )
-        else:
-            await update.message.reply_text("Press 'Start' to begin", reply_markup=start_keyboard)
-        return
+    text = update.message.text.strip()
 
     if text == "Today":
         tasks = "\n".join(daily_checklist)
-        await update.message.reply_text(f"Today's checklist:\n{tasks}")
+        await update.message.reply_text(f"Твои задачи на сегодня:\n{tasks}")
 
     elif text == "Motivation":
         quote = random.choice(affirmations)
-        await update.message.reply_text(f"Motivation:\n{quote}")
+        await update.message.reply_text(f"Мотивация дня:\n{quote}")
 
     elif text == "Goals":
         await update.message.reply_text(goals_text)
@@ -116,7 +96,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     else:
-        await update.message.reply_text("Unknown command. Use the menu.")
+        await update.message.reply_text("Выбери действие с кнопок.")
 
 # Генерация шуток
 async def fetch_joke():
@@ -126,7 +106,14 @@ async def fetch_joke():
             response = await client.get(url)
             return response.text.strip()
     except:
-        return "Couldn't fetch joke."
+        return "Не удалось получить шутку."
+
+# Напоминания
+async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=context.job.chat_id, text="Доброе утро, Адиль! Сегодня твои цели ждут: Today")
+
+async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=context.job.chat_id, text="Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
 
 # Запуск бота
 if __name__ == '__main__':
@@ -134,5 +121,9 @@ if __name__ == '__main__':
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    job_queue: JobQueue = app.job_queue
+    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)
+    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419)
 
     app.run_polling()
