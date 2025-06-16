@@ -1,10 +1,10 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, JobQueue
 import os
 import threading
 import random
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from datetime import time  # ✨ добавили импорт!
+from datetime import time
 
 # Токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -42,27 +42,44 @@ daily_checklist = [
 
 affirmations = [line.strip() for line in goals_text.strip().split('\n') if line.strip()]
 
+# Клавиатура
+main_keyboard = ReplyKeyboardMarkup(
+    [
+        ["Сегодня", "Мотивация"],
+        ["Цели / Установки", "Закрыть"]
+    ],
+    resize_keyboard=True
+)
+
 # ---------- КОМАНДЫ ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет, друг! Добро пожаловать!")
+    await update.message.reply_text(
+        "Привет, Адиль! Я твой бот-наставник. Выбирай, что хочешь сделать:",
+        reply_markup=main_keyboard
+    )
 
-async def goals(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(goals_text)
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
 
-async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tasks = "\n".join(daily_checklist)
-    await update.message.reply_text(f"📝 Твои задачи на сегодня:\n{tasks}")
-
-async def affirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    quote = random.choice(affirmations)
-    await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
+    if text == "Сегодня":
+        tasks = "\n".join(daily_checklist)
+        await update.message.reply_text(f"📝 Задачи на сегодня:\n{tasks}")
+    elif text == "Мотивация":
+        quote = random.choice(affirmations)
+        await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
+    elif text == "Цели / Установки":
+        await update.message.reply_text(goals_text)
+    elif text == "Закрыть":
+        await update.message.reply_text("Клавиатура убрана", reply_markup=ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
 
 # ---------- НАПОМИНАНИЯ ----------
 async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро, Адиль! Сегодня твои цели ждут: /daily")
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро! Не забудь: /start → Сегодня")
 
 async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
+    await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что удалось и что улучшить.")
 
 # ---------- ФЕЙКОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER ----------
 class DummyHandler(BaseHTTPRequestHandler):
@@ -72,9 +89,9 @@ class DummyHandler(BaseHTTPRequestHandler):
         self.wfile.write(b'OK')
 
 def run_fake_server():
-    port = int(os.environ.get("PORT", 10000))  # Render шлёт этот порт
+    port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("", port), DummyHandler)
-    print(f"Fake HTTP server запущен на порту {port}")
+    print(f"Fake HTTP server running on port {port}")
     server.serve_forever()
 
 threading.Thread(target=run_fake_server, daemon=True).start()
@@ -84,14 +101,12 @@ if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("goals", goals))
-    app.add_handler(CommandHandler("daily", daily))
-    app.add_handler(CommandHandler("affirmation", affirmation))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     job_queue: JobQueue = app.job_queue
 
-    # Добавляем напоминания (время сервера — UTC)
-    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 по Алматы
-    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 по Алматы
+    # ✅ Замени chat_id на свой (временно можешь распечатать через update.effective_chat.id)
+    job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 Алматы
+    job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 Алматы
 
     app.run_polling()
