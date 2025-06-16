@@ -53,11 +53,6 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-start_keyboard = ReplyKeyboardMarkup(
-    [["Старт 🚀"]],
-    resize_keyboard=True
-)
-
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
