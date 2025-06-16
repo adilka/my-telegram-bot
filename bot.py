@@ -42,7 +42,7 @@ daily_checklist = [
 ]
 
 affirmations = goals_text.strip().splitlines()
-
+active_users = set()
 # Клавиатура
 main_keyboard = ReplyKeyboardMarkup(
     [
@@ -52,12 +52,26 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+start_keyboard = ReplyKeyboardMarkup(
+    [["Старт 🚀"]],
+    resize_keyboard=True
+)
+
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     text = update.message.text
+
+    if user_id not in active_users:
+        if text == "Старт 🚀":
+            active_users.add(user_id)
+            await update.message.reply_text("Добро пожаловать! Выбирай, что делать:", reply_markup=main_keyboard)
+        else:
+            await update.message.reply_text("Нажми 'Старт 🚀' для начала", reply_markup=start_keyboard)
+        return
 
     if text == "Сегодня":
         tasks = "\n".join(daily_checklist)
@@ -69,10 +83,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(goals_text)
     elif text == "Joke 😈":
         joke = await fetch_dark_joke()
-        await update.message.reply_text(joke)
+        msg = await update.message.reply_text(joke)
+        await asyncio.sleep(300)
+        try:
+            await msg.delete()
+        except:
+            pass
     else:
-        await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
-
+        await update.message.reply_text("Выбери действие с кнопок ⬆️")
 # Шутки с чёрным юмором
 async def fetch_dark_joke():
     url = "https://v2.jokeapi.dev/joke/Dark?type=twopart"
