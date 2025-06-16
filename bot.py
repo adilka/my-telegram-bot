@@ -53,7 +53,10 @@ main_keyboard = ReplyKeyboardMarkup(
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
-
+await update.message.reply_text(
+    "Welcome! Choose an action below:",
+    reply_markup=main_keyboard  # эта клавиатура перекроет старую
+)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
