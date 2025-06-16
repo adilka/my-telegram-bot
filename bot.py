@@ -1,15 +1,18 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-goals_text = "1. Улучшать девопс\n2. Делать игру\n..."
+goals_text = """
+1. Улучшать девопс
+2. Делать проект (игру)
+3. Выучить английский
+...
+"""
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет, Адиль! Я бот 💪")
+    await update.message.reply_text("Привет, Адиль! Я бот-наставник 💪")
 
 async def goals(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(goals_text)
