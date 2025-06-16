@@ -53,6 +53,12 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+start_keyboard = ReplyKeyboardMarkup(
+    [["Start"]],
+    resize_keyboard=True,
+    one_time_keyboard=True
+)
+
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
@@ -60,14 +66,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-
+    
     if user_id not in active_users:
-        if text == "Старт 🚀":
+        if text == "Start":
             active_users.add(user_id)
-            await update.message.reply_text("Добро пожаловать! Выбирай, что делать:", reply_markup=main_keyboard)
-        else:
-            await update.message.reply_text("Нажми 'Старт 🚀' для начала", reply_markup=start_keyboard)
-        return
+            await update.message.reply_text(
+                "Добро пожаловать! Выбирай, что делать:",
+                reply_markup=main_keyboard
+        )
+    else:
+        await update.message.reply_text("Press 'Start' to begin", reply_markup=start_keyboard)
+    return
 
     if text == "Сегодня":
         tasks = "\n".join(daily_checklist)
