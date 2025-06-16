@@ -22,3 +22,18 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("goals", goals))
     app.run_polling()
+
+import threading
+import http.server
+import socketserver
+
+# Фейковый HTTP-сервер, чтобы Render думал, что порт открыт
+def fake_server():
+    PORT = int(os.environ.get('PORT', 10000))
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"Fake web server started at port {PORT}")
+        httpd.serve_forever()
+
+threading.Thread(target=fake_server).start()
+
