@@ -35,5 +35,5 @@ def fake_server():
         print(f"Fake web server started at port {PORT}")
         httpd.serve_forever()
 
-threading.Thread(target=fake_server).start()
+threading.Thread(target=fake_web_server, daemon=True).start()
 
