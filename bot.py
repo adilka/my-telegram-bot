@@ -1,40 +1,39 @@
+import os
+import random
+import httpx
+import threading
+from datetime import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, JobQueue
-import os
-import threading
-import random
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from datetime import time
-import httpx
-import asyncio
 
-# Токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-recent_jokes = set()
 
-# Контент
-goals_text = """
-Улучшать навыки девопсера
-Сделать проект
+# Твои цели
+goals_text = """\
+Улучшать девопс
+Делать проект (игру)
 Выучить английский
-Заниматься легкими тренировками
+Заниматься спортом
 Читать книгу
 Слушать музыку
-Смотреть любые ролики в ютубе
-Жить спокойно и размеренно
+Смотреть ролики в ютубе (без вины)
+Жить спокойно, не дрочить
 Богатство и доброта — это нормально
 Будь собой, говори честно, иди своим путём
-Мой девиз - постоянное развитие и стабильность
+Перестань быть "слабым ребёнком", ты взрослый
 Не ленись, слушай близких
 Радуйся моменту, цени жизнь
 Удали Instagram, не сливай фокус
 Не будь токсичным, знай границы
 Развивай речь и дикцию
 Мозг любит иллюзии — но ты выбираешь путь
+Мой девиз — постоянное развитие и стабильность
 """
 
 daily_checklist = [
-    "✅ Отжимания (15 мин +1 раз каждый тренировачный день)",
+    "✅ Отжимания (15 мин +1 раз каждый тренировочный день)",
     "✅ Английский (Смотреть ролики на англ)",
     "✅ 1 задача по девопсу каждый рабочий день",
     "✅ 15 минут книги перед сном",
@@ -48,17 +47,14 @@ affirmations = goals_text.strip().splitlines()
 main_keyboard = ReplyKeyboardMarkup(
     [
         ["Сегодня", "Мотивация"],
-        ["Цели", "Прикол"]
+        ["Цели", "Joke 😈"]
     ],
     resize_keyboard=True
 )
 
-# ---------- КОМАНДЫ ----------
+# Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет, друг! Я бот-наставник. Выбирай, что хочешь сделать:",
-        reply_markup=main_keyboard
-    )
+    await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -69,50 +65,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "Мотивация":
         quote = random.choice(affirmations)
         await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
-    elif text == "Цели / Установки":
+    elif text == "Цели":
         await update.message.reply_text(goals_text)
-    elif text == "Шутка дня 😂":
-        joke = await fetch_joke()
+    elif text == "Joke 😈":
+        joke = await fetch_dark_joke()
         await update.message.reply_text(joke)
-
     else:
         await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
 
-#шутка щщс
-async def fetch_joke():
-    url = "https://v2.jokeapi.dev/joke/Any?type=twopart"
+# Шутки с чёрным юмором
+async def fetch_dark_joke():
+    url = "https://v2.jokeapi.dev/joke/Dark?type=twopart"
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=5)
+            response = await client.get(url)
             data = response.json()
+            return f"😈 {data['setup']}\n👉 {data['delivery']}"
+    except Exception:
+        return "Не удалось получить шутку. Попробуй позже."
 
-            joke_id = data.get("id")
-            if joke_id in recent_jokes:
-                return await fetch_joke()  # попробуем снова
-
-            # сохраняем шутку в память на 5 минут
-            recent_jokes.add(joke_id)
-            asyncio.create_task(forget_joke(joke_id))
-
-            setup = data.get("setup", "🙂")
-            delivery = data.get("delivery", "...")
-            return f"😂 {setup}\n👉 {delivery}"
-    except Exception as e:
-        return "😅 Не удалось получить шутку. Попробуй позже!"
-
-# Функция забывания
-async def forget_joke(joke_id):
-    await asyncio.sleep(300)  # 5 минут
-    recent_jokes.discard(joke_id)
-
-# ---------- НАПОМИНАНИЯ ----------
+# Напоминания (если используешь chat_id)
 async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=context.job.chat_id, text="🌅 Доброе утро! Не забудь: /start → Сегодня")
 
 async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что удалось и что улучшить.")
 
-# ---------- ФЕЙКОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER ----------
+# Фейковый HTTP-сервер для Render
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
