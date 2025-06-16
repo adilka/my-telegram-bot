@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import httpx
@@ -13,23 +14,17 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 # Твои цели
 goals_text = """\
 Улучшать девопс
-Делать проект (игру)
 Жить по графику
 Выучить английский
 Заниматься спортом
 Читать книгу
 Слушать музыку
-Смотреть ролики в ютубе (без вины)
-Жить спокойно, не дрочить
 Уметь отдыхать
 Жить спокойно и размеренно
 Богатство и доброта — это нормально
 Будь собой, говори честно, иди своим путём
-Перестань быть "слабым ребёнком", ты взрослый
 Перестать страдать, радоваться мелочам и ценить жизнь
 Не ленись, слушай близких
-Радуйся моменту, цени жизнь
-Удали Instagram, не сливай фокус
 Радуйся моменту
 Убери социальные сети
 Не будь токсичным, знай границы
@@ -48,22 +43,60 @@ daily_checklist = [
 ]
 
 affirmations = goals_text.strip().splitlines()
-
+active_users = set()
 # Клавиатура
 main_keyboard = ReplyKeyboardMarkup(
-    [
-        ["Сегодня", "Мотивация"],
-        ["Цели", "Joke 😈"]
-    ],
+    [["Today"], ["Motivation", "Goals"], ["Joke 😈"]],
     resize_keyboard=True
 )
 
 # Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет, друг! Я бот-наставник.\nВыбирай, что хочешь сделать:", reply_markup=main_keyboard)
-
+await update.message.reply_text(
+    "Welcome! Choose an action below:",
+    reply_markup=main_keyboard  # эта клавиатура перекроет старую
+)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     text = update.message.text
+
+    if user_id not in active_users:
+        if text == "Start":
+            active_users.add(user_id)
+            await update.message.reply_text(
+                "Welcome! Choose an action below:",
+                reply_markup=main_keyboard
+            )
+        else:
+            await update.message.reply_text("Press 'Start' to begin 👇", reply_markup=start_keyboard)
+        return
+
+    # 🔽 Команды после старта
+    if text == "Today":
+        tasks = "\n".join(daily_checklist)
+        await update.message.reply_text(f"📝 Today's checklist:\n{tasks}")
+
+    elif text == "Motivation":
+        quote = random.choice(affirmations)
+        await update.message.reply_text(f"🎯 Motivation:\n{quote}")
+
+    elif text == "Goals":
+        await update.message.reply_text(goals_text)
+
+    elif text == "Joke 😈":
+        joke = await fetch_dark_joke()
+        msg = await update.message.reply_text(joke)
+        await asyncio.sleep(300)
+        try:
+            await msg.delete()
+        except:
+            pass
+
+    else:
+        await update.message.reply_text("Unknown command. Choose from the menu ⬆️")
+
+
 
     if text == "Сегодня":
         tasks = "\n".join(daily_checklist)
@@ -75,10 +108,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(goals_text)
     elif text == "Joke 😈":
         joke = await fetch_dark_joke()
-        await update.message.reply_text(joke)
+        msg = await update.message.reply_text(joke)
+        await asyncio.sleep(300)
+        try:
+            await msg.delete()
+        except:
+            pass
     else:
-        await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
-
+        await update.message.reply_text("Выбери действие с кнопок ⬆️")
 # Шутки с чёрным юмором
 async def fetch_dark_joke():
     url = "https://v2.jokeapi.dev/joke/Dark?type=twopart"
@@ -113,7 +150,7 @@ def run_fake_server():
 threading.Thread(target=run_fake_server, daemon=True).start()
 
 # ---------- ЗАПУСК ----------
-if __name__ == '__main__':More actions
+if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
