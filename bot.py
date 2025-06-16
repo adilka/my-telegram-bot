@@ -1,8 +1,10 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
 import os
 import threading
+import random
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from datetime import time  # ✨ добавили импорт!
 
 # Токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -30,7 +32,7 @@ goals_text = """
 """
 
 daily_checklist = [
-    "✅ Спорт (15-30 мин)",
+    "✅ Спорт (15–30 мин)",
     "✅ Английский (Duolingo / 10 слов)",
     "✅ 1 задача по девопсу",
     "✅ 15 минут книги",
@@ -39,12 +41,21 @@ daily_checklist = [
 ]
 
 affirmations = [line.strip() for line in goals_text.strip().split('\n') if line.strip()]
-# Команды
+
+# ---------- КОМАНДЫ ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет, друг! Добро пожаловать")
+    await update.message.reply_text("Привет, друг! Добро пожаловать!")
 
 async def goals(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(goals_text)
+
+async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tasks = "\n".join(daily_checklist)
+    await update.message.reply_text(f"📝 Твои задачи на сегодня:\n{tasks}")
+
+async def affirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    quote = random.choice(affirmations)
+    await update.message.reply_text(f"🎯 Мотивация дня:\n{quote}")
 
 # ---------- НАПОМИНАНИЯ ----------
 async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
@@ -53,7 +64,7 @@ async def morning_reminder(context: ContextTypes.DEFAULT_TYPE):
 async def evening_reflection(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 Вечер! Подумай: что получилось сегодня? Что бы улучшил завтра?")
 
-# Фейковый HTTP сервер для Render
+# ---------- ФЕЙКОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER ----------
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -66,10 +77,8 @@ def run_fake_server():
     print(f"Fake HTTP server запущен на порту {port}")
     server.serve_forever()
 
-# Запуск фейкового сервера в фоне
 threading.Thread(target=run_fake_server, daemon=True).start()
 
-# Запуск Telegram-бота
 # ---------- ЗАПУСК ----------
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -81,7 +90,7 @@ if __name__ == '__main__':
 
     job_queue: JobQueue = app.job_queue
 
-    # Добавляем напоминания (по серверному времени UTC!)
+    # Добавляем напоминания (время сервера — UTC)
     job_queue.run_daily(morning_reminder, time=time(hour=5, minute=0), chat_id=430893419)     # 08:00 по Алматы
     job_queue.run_daily(evening_reflection, time=time(hour=14, minute=30), chat_id=430893419) # 21:30 по Алматы
 
