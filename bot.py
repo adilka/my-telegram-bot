@@ -46,12 +46,10 @@ affirmations = goals_text.strip().splitlines()
 active_users = set()
 # Клавиатура
 main_keyboard = ReplyKeyboardMarkup(
-    [
-        ["Сегодня", "Мотивация"],
-        ["Цели", "Joke 😈"]
-    ],
+    [["Today"], ["Motivation", "Goals"], ["Joke 😈"]],
     resize_keyboard=True
 )
+
 
 start_keyboard = ReplyKeyboardMarkup(
     [["Start"]],
@@ -66,17 +64,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-    
+
     if user_id not in active_users:
         if text == "Start":
             active_users.add(user_id)
             await update.message.reply_text(
-                "Добро пожаловать! Выбирай, что делать:",
+                "Welcome! Choose an action below:",
                 reply_markup=main_keyboard
-        )
+            )
+        else:
+            await update.message.reply_text("Press 'Start' to begin 👇", reply_markup=start_keyboard)
+        return
+
+    # 🔽 Команды после старта
+    if text == "Today":
+        tasks = "\n".join(daily_checklist)
+        await update.message.reply_text(f"📝 Today's checklist:\n{tasks}")
+
+    elif text == "Motivation":
+        quote = random.choice(affirmations)
+        await update.message.reply_text(f"🎯 Motivation:\n{quote}")
+
+    elif text == "Goals":
+        await update.message.reply_text(goals_text)
+
+    elif text == "Joke 😈":
+        joke = await fetch_dark_joke()
+        msg = await update.message.reply_text(joke)
+        await asyncio.sleep(300)
+        try:
+            await msg.delete()
+        except:
+            pass
+
     else:
-        await update.message.reply_text("Press 'Start' to begin", reply_markup=start_keyboard)
-    return
+        await update.message.reply_text("Unknown command. Choose from the menu ⬆️")
+
+    
 
     if text == "Сегодня":
         tasks = "\n".join(daily_checklist)
