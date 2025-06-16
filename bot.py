@@ -69,7 +69,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "Цели / Установки":
         await update.message.reply_text(goals_text)
     elif text == "Закрыть":
-        await update.message.reply_text("Закрыто", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Спасибо, до встречи <3", reply_markup=ReplyKeyboardRemove())
     else:
         await update.message.reply_text("Не понял, выбери действие с кнопок ⬆️")
 
